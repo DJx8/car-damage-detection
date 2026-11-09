@@ -1,71 +1,107 @@
-# Car Damage Detection and Attribution System
+# Automated Car Damage Detection and Attribution System
 
-A computer vision project that detects visible vehicle damage, segments vehicle components, associates damage regions with the affected components, and estimates damage severity.
+A computer-vision research prototype that isolates a vehicle, segments its exterior parts, detects visible damage, links damage regions to vehicle parts, and estimates severity using rule-based heuristics.
 
-> **Project status:** Research prototype. Results are experimental and should not be treated as a professional vehicle inspection, repair estimate, or insurance assessment.
+<details>
+<summary><strong>Project status and important notice</strong></summary>
 
-## Overview
+This is an experimental prototype, not a professional vehicle inspection, repair estimate, or insurance assessment. Severity labels are heuristic outputs and are not validated automotive repair standards.
 
-The system uses a three-stage instance-segmentation pipeline:
+</details>
 
-1. **Vehicle isolation** — a COCO-pretrained YOLO11n-seg model identifies the car (COCO class ID 2) and isolates its region. This model was used as a pretrained model; it was not trained as part of this project.
-2. **Vehicle-part segmentation** — a YOLO11n-seg model fine-tuned by me identifies ten exterior vehicle components.
-3. **Damage segmentation** — a separate YOLO11n-seg model fine-tuned by me identifies five visible damage categories.
+## Live demo
 
-The part and damage models are trained separately because the two source datasets provide different annotation types. Their predicted masks are combined to associate a damage region with a vehicle part using mask overlap.
+Try the hosted Gradio application on Hugging Face Spaces:
+
+**[Open the Car Damage Detection demo](https://huggingface.co/spaces/Deejay888/car-damage-detection)**
+
+The GitHub repository contains the application source and project documentation. The trained model-weight files and source datasets are not included in this repository.
+
+## How it works
+
+The application uses three YOLO11n-seg models in a staged pipeline:
+
+1. **Vehicle isolation:** a COCO-pretrained YOLO11n-seg model detects the car (COCO class ID 2) and isolates the largest detected vehicle. This model was used pretrained; it was not trained as part of this project.
+2. **Vehicle-part segmentation:** a separate YOLO11n-seg model, fine-tuned by me, predicts ten exterior vehicle-part classes.
+3. **Damage segmentation:** another YOLO11n-seg model, fine-tuned by me, predicts five visible damage classes.
+4. **Damage-to-part attribution:** the application compares the damage and part masks. It assigns a damage instance to the part with the greatest overlap when that overlap covers at least 10% of the full damage mask. Otherwise, it marks the damage as **Unassigned**.
+5. **Severity estimation:** a rule-based heuristic estimates severity from the percentage of the assigned part covered by the damage mask. Shattered glass and broken lamps are handled as critical cases.
+
+The part and damage models are trained separately because their source datasets use different annotation types and class definitions.
 
 ## Pipeline
 
 ```text
-Input image
-    |
-    v
+Input vehicle image
+        |
+        v
 Vehicle detection and isolation
-    |
-    v
-Vehicle-part segmentation  +  Damage segmentation
-    |                              |
-    +---------- mask overlap ------+
+        |
+        +----------------------+
+        |                      |
+        v                      v
+Vehicle-part segmentation   Damage segmentation
+        |                      |
+        +----------+-----------+
                    |
                    v
        Damage-to-part attribution
+         (mask-overlap rule)
                    |
                    v
-       Coverage and severity rules
+       Coverage-based severity
+             estimation
                    |
                    v
-     Visual results and JSON report
+       Visual outputs + JSON report
 ```
 
-### Damage attribution
+## Models and training
 
-For each detected damage instance, the system compares its mask with the predicted part masks and assigns it to the part with the greatest overlap, subject to the implementation's overlap threshold. If no qualifying part is found, the damage is marked **Unassigned**.
+| Model | Purpose | Training / provenance |
+|---|---|---|
+| Vehicle model | Detect and isolate the car | COCO-pretrained YOLO11n-seg; not trained by me |
+| Parts model | Segment ten exterior vehicle parts | YOLO11n-seg fine-tuned by me |
+| Damage model | Segment five visible damage categories | YOLO11n-seg fine-tuned by me |
 
-### Severity estimation
+The two task-specific models were trained in Google Colab using a Tesla T4 GPU:
 
-Severity is estimated using the percentage of a part covered by the damage mask. The current prototype uses heuristic thresholds, with shattered glass and broken lamps treated as critical cases. These thresholds are project-specific rules, not validated automotive repair standards.
+- Parts model: 35 epochs.
+- Damage model: 45 epochs.
+
+### Held-out test results
+
+| Metric | Vehicle-parts model | Damage model |
+|---|---:|---:|
+| Precision | 93.47% | 75.50% |
+| Recall | 85.79% | 63.79% |
+| mAP@50 | 90.48% | 70.57% |
+| mAP@50–95 | 70.30% | 48.00% |
+| F1 score | 89.46% | 69.18% |
+
+The test splits contained 101 images for the parts model and 374 images for the damage model. These are model-level results on their respective test sets, **not an end-to-end system accuracy score**. The damage model's lower recall means that some real damage may be missed.
 
 ## Datasets and acknowledgements
 
-This project uses two separately sourced datasets. **The datasets themselves are not included in this repository.** Please obtain them only from their official sources and follow their current terms.
+The datasets are not included in this repository. Obtain them only from their official sources and follow their current terms.
 
-### 1. Car Parts dataset — Humans in the Loop
+### Humans in the Loop — Car Parts dataset
 
 - Official dataset page: https://humansintheloop.org/resources/datasets/car-parts-and-car-damages-dataset/
-- The publisher describes the dataset as dedicated to the public domain under **CC0 1.0**.
-- This project used a selected car-parts subset and selected ten component classes for training.
-- Dataset source and terms should be checked at the official page before reuse.
+- The publisher describes the dataset as dedicated to the public domain under CC0 1.0.
+- I used a selected subset and trained the ten vehicle-part classes used by this project.
+- Check the official page for the current dataset details and terms.
 
-### 2. CarDD — Car Damage Detection Dataset
+### CarDD — Car Damage Detection Dataset
 
 - Official project page: https://cardd-ustc.github.io/
 - Paper: Xinkuang Wang, Wenjing Li, and Zhongcheng Wu, “CarDD: A New Dataset for Vision-Based Car Damage Detection,” *IEEE Transactions on Intelligent Transportation Systems*, 2023, 24(7), 7202–7214.
 - DOI: https://doi.org/10.1109/TITS.2023.3258480
 - Official licensing document: https://cardd-ustc.github.io/docs/CarDD_license.pdf
 
-**Important CarDD notice:** The dataset's licensing document states that prior consent is required for research use and that distribution or broadcasting of all or part of the dataset to third parties requires prior authorization. This repository therefore does not host CarDD images, annotations, archives, or download mirrors. Public availability of this code does not grant access to CarDD or permission to redistribute it. Any use of trained weights derived from CarDD must be considered separately under the dataset terms and any written permission received from the dataset owner.
+**CarDD licensing notice:** Its licensing document states that prior consent is required for research use and that distribution or broadcasting of all or part of the dataset to third parties requires prior authorization. This repository does not host CarDD images, annotations, archives, or download mirrors. Permission to access or use a dataset for training should not be assumed to include permission to publish derived model weights. The weights trained using CarDD are therefore not included here pending confirmation of the applicable permissions.
 
-### Dataset citation
+### CarDD citation
 
 ```bibtex
 @article{CarDD,
@@ -80,64 +116,71 @@ This project uses two separately sourced datasets. **The datasets themselves are
 }
 ```
 
-## Model training and evaluation
-
-The two task-specific models were trained using Google Colab with a Tesla T4 GPU. The parts model was trained for 35 epochs and the damage model for 45 epochs. Both use the YOLO11n-seg architecture.
-
-### Held-out test results
-
-| Metric | Vehicle-parts model | Damage model |
-|---|---:|---:|
-| Precision | 93.47% | 75.50% |
-| Recall | 85.79% | 63.79% |
-| mAP@50 | 90.48% | 70.57% |
-| mAP@50–95 | 70.30% | 48.00% |
-| F1 score | 89.46% | 69.18% |
-
-Test set sizes were 101 images for the parts model and 374 images for the damage model. These metrics describe the individual segmentation models on their respective test splits; they are not an end-to-end system accuracy score.
-
-The damage model's lower recall means some real damage may be missed. Performance can also be affected by lighting, reflections, occlusion, image quality, and damage that is small or difficult to distinguish.
-
-## Technology
+## Technology stack
 
 - Python
 - Ultralytics YOLO11n-seg
 - PyTorch
 - OpenCV
 - NumPy
-- Gradio (for the interactive demo)
+- Pillow
+- Gradio
+- Hugging Face Spaces
 
-## Repository contents
+## Repository structure
 
-The repository is being published in stages. Dataset files and trained weights are intentionally excluded while their applicable permissions are reviewed.
+```text
+car-damage-detection/
+├── app.py
+├── requirements.txt
+├── README.md
+├── models/
+│   └── README.md
+├── docs/
+│   └── README.md
+└── sample_images/
+    └── README.md
+```
 
-- `app.py` — interactive application (to be added)
-- `requirements.txt` — Python dependencies
-- `models/` — model-weight availability and licensing notes
-- `docs/` — architecture and evaluation documentation
-- `sample_images/` — reserved for images that are confirmed safe to publish
+## Run locally
 
-## Reproducibility and usage
+The application source is available here, but the three trained model-weight files are not distributed in this repository. A local run requires you to obtain the model files lawfully and place them at the following paths:
 
-The complete runnable application and model weights are not yet included in this repository. Setup instructions will be added after the public-release and licensing review is complete. Do not assume that cloning this repository alone provides access to the datasets or trained weights.
+```text
+models/
+├── vehicle_model.pt
+├── parts_model.pt
+└── damage_model.pt
+```
+
+Then install the dependencies and start the Gradio app:
+
+```bash
+pip install -r requirements.txt
+python app.py
+```
+
+Without the model-weight files, the application cannot perform inference. The hosted Hugging Face demo is the easiest way to try the project.
 
 ## Limitations
 
-- This is an experimental prototype, not a production-grade inspection system.
-- The damage model can miss visible damage, especially subtle cracks and small defects.
-- Part attribution depends on the quality and overlap of predicted masks; some damage may remain unassigned.
-- Severity levels are heuristic estimates and are not calibrated against repair costs or certified inspection criteria.
+- This is a research prototype, not a production-grade vehicle inspection system.
+- The damage model may miss subtle, small, occluded, or visually ambiguous damage.
+- Attribution depends on the quality and overlap of predicted masks; some detections may remain unassigned.
+- If a damage region spans multiple vehicle parts, the current logic assigns it to only the single part with the greatest qualifying overlap.
+- Severity is a fixed heuristic based on mask coverage, not a learned repair-cost model or certified assessment.
 - The system has not been validated across all vehicle types, camera conditions, or real-world inspection settings.
+- Model-level test metrics do not represent the accuracy of the complete end-to-end pipeline.
 
-## Ultralytics acknowledgement
+## Ultralytics acknowledgement and licensing
 
-This project uses the Ultralytics YOLO11 implementation and models. Refer to the official documentation and licensing information:
+This project uses the Ultralytics YOLO11 implementation and models:
 
 - Documentation: https://docs.ultralytics.com/models/yolo11/
-- License: https://www.ultralytics.com/license
-- Source: https://github.com/ultralytics/ultralytics
+- Licensing: https://www.ultralytics.com/license
+- Source code: https://github.com/ultralytics/ultralytics
 
-Ultralytics publishes AGPL-3.0 and Enterprise licensing options. Review the applicable terms for the software, pretrained weights, fine-tuned weights, and the complete application before choosing a repository licence or distributing artifacts. No separate project licence is asserted by this README.
+Ultralytics publishes AGPL-3.0 and Enterprise licensing options. Review the applicable terms for the software, pretrained weights, fine-tuned weights, and the complete application before redistributing artifacts. No separate project licence is asserted by this README.
 
 ## Author
 
