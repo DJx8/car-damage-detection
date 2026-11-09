@@ -1,7 +1,8 @@
-# Initial runtime dependencies; pin tested versions before publishing a reproducible release.
-ultralytics
-gradio
-numpy
-opencv-python-headless
-Pillow
+# Runtime dependencies pinned from the working local environment.
+# Hugging Face Spaces helper is kept unpinned because it is not installed locally.
+ultralytics==8.4.204
+gradio==6.31.0
+numpy==2.5.4
+opencv-python-headless==5.0.0.93
+Pillow==12.3.0
 spaces
