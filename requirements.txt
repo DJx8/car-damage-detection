@@ -1,0 +1,7 @@
+# Initial runtime dependencies; pin tested versions before publishing a reproducible release.
+ultralytics
+gradio
+numpy
+opencv-python-headless
+Pillow
+spaces
